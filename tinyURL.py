@@ -1,46 +1,85 @@
-from flask import Flask
-from flask import g
+from flask import Flask, g, redirect, url_for, request
 import json
 import sqlite3
 
 DATABASE = 'test.db'
+CHAR = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 app = Flask(__name__)
 
 @app.route("/")
 def hello():
-    return "Hello World!"
+    return "Hello World! Thank you for using my tinyURL system."
 
-@app.route('/user/<username>')
-def show_user_profile(username):
-    # show the user profile for that user
-    return 'User %s' % username
+@app.route('/<inputStr>')
+def getOriginalURL(inputStr):
+    # todo: different divices
+    print(request.user_agent.platform)
+    id = 0
+    for i in range(len(inputStr)):
+        char = inputStr[i]
+        if char in CHAR:
+            curr = 0
+            if 65 <= ord(char) <= 90: #A-Z
+                curr = ord(char) - 29
+            elif 97 <= ord(char) <= 122: #a-z
+                curr = ord(char) - 87
+            elif 48 <= ord(char) <= 57:
+                curr = ord(char) - 48
+            id = id * len(CHAR) + curr
+        else :
+            urlInfo = {'result': 'failed', 'data':'Error: Invalid chatacters'}
+            return json.dumps(urlInfo)
 
-@app.route('/post/<int:post_id>')
-def show_post(post_id):
-    # show the post with the given id, the id is an integer
-    return 'Post %d' % post_id
+    data = query_db("SELECT * from url WHERE id = ?;",(str(id)), one = True)
+    if data:
+        id, _, type, originalURL, times, createTime = data
 
-@app.route('/url/<inputURL>')
-def testDB(inputURL):
-    db = get_db()
-    cur = db.cursor()
-    cur.execute('SELECT SQLITE_VERSION()')
-    data = cur.fetchone()
-    # print("SQLite version: {}".format(data))
-    qry = "select * from `url` where `origin_url` = '{}';".format(inputURL)
-    data = query_db(qry, one = True)
+        # todo: times doesn't work
+        times += int(times) + 1
+        res = query_db("UPDATE url SET visited_times=? WHERE id=?", (str(times), str(id)))
+
+        if originalURL is not None:
+            if originalURL.find("http://") != 0 and originalURL.find("https://") != 0:
+                originalURL = "http://" + originalURL
+
+        return redirect("{}".format(originalURL), code=302)
+    else :
+        urlInfo = {'result': 'failed', 'data':'Error: Shorten URL not existed'}
+        return json.dumps(urlInfo)
+
+@app.route('/url/<user>/<inputURL>')
+def getTinyURL(inputURL, user):
+    # db = get_db()
+    # cur = db.cursor()
+    print(inputURL)
+    data = query_db("SELECT * FROM url WHERE origin_url = ?", (inputURL,), True)
     if data:
         # todo: judge tiny or original
         # todo: if tiny, convert into id and get info
         # todo: if original, get info
-        id, originalURL, type, times, createTime = data
-        urlInfo = {'result': 'succeed','id': id, 'originalURL': originalURL, 'type': type, 'visitedTimes': times, 'createTime': createTime}
+        id, userid, type, originalURL, times, createTime = data
+        total, modifiedStr = id, ''
+        while total != 0:
+            modifiedStr += CHAR[total % len(CHAR)]
+            total //= len(CHAR)
+        generatedURL = "localhost:5000/{}".format(modifiedStr)
+        urlInfo = {'result': 'succeed','id': id, 'userID': userid, 'type': type, 'originalURL': originalURL, 'generatedURL': generatedURL, 'visitedTimes': times, 'createTime': createTime}
         return json.dumps(urlInfo)
     else:
         # todo: create tiny url
         urlInfo = {'result': 'failed', 'data':'Error: No such url created'}
         return json.dumps(urlInfo)
+
+@app.route('/url/<user>')
+def getURLList(user):
+    data = query_db("SELECT * FROM url WHERE userid = ?",(user,), False)
+    urlSet = []
+    for urlData in data:
+        id, _, type, originalURL, times, createTime = urlData
+        url = {'id': id, 'originalURL': originalURL, 'type': type, 'visitedTimes': times, 'createTime': createTime}
+        urlSet.append(url)
+    return json.dumps(urlSet)
 
 def init_db():
     print("initializing data base...")
