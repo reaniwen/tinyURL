@@ -21,7 +21,7 @@ $ python tinyURL.py
 
 ## Usage
 
-- to visit a shortenedURL, visit the URL like
+#### to visit a shortenedURL, visit the URL like
 ```bash
 localhost:5000/<shortenedCode>
 ```
@@ -33,7 +33,7 @@ eg: [localhost:5000/000001](localhost:5000/000001)
 
 
 
-- to submit an URL and get shortened URL, visit the URL like
+#### to submit an URL and get shortened URL, visit the URL like
 ```bash
 localhost:5000/u/<userid>/<rawURL>
 ```
@@ -45,7 +45,7 @@ eg: localhost:5000/u/1/www.google.com
 
 
 
-- to get a list of all existing shortened URLs of current user, visit the URL like
+#### to get a list of all existing shortened URLs of current user, visit the URL like
 ```bash
 localhost:5000/u/<userid>
 ```
@@ -57,14 +57,14 @@ eg: [localhost:5000/u/1](localhost:5000/u/1)
 
 
 
-- to configure the URL should redirect to based on device, visit the URL like 
+#### to configure the URL should redirect to based on device, visit the URL like 
 ```bash
 localhost:5000/u/<userid>/<shortenedCode>/config/<mode>/<newURL>
 ```
-**userid** is the id of user who want to get the shortened URL
-**shortenedCode** is the six Characters generated after slash in the shortenURL
-**mode** is the mode user want to configure('mobile','tablet','desktop')
-**newURL** is the new URL user want to change to in the mode of `mode`
+**userid** is the id of user who want to get the shortened URL<br>
+**shortenedCode** is the six Characters generated after slash in the shortenURL<br>
+**mode** is the mode user want to configure('mobile','tablet','desktop')<br>
+**newURL** is the new URL user want to change to in the mode of `mode`<br>
 
 eg: [localhost:5000/u/1/000001/config/mobile/m.google.com](localhost:5000/u/1/000001/config/mobile/m.google.com)
 
