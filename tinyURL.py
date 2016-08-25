@@ -19,7 +19,7 @@ def hello():
 # Redirect from shorten URL
 @app.route('/<inputStr>')
 def getOriginalURL(inputStr):
-    # todo: judge different divices
+    # Judge different divices
     platform = request.user_agent.platform
     mode = 'computer'
     if platform in ['iphone', 'android', 'blackberry']:
@@ -37,7 +37,7 @@ def getOriginalURL(inputStr):
     if data:
         originalURL, mobile, tablet, originalTimes, mobileTimes, tabletTimes = data
 
-        # add different time for different divices
+        # Add different time for different divices
         url = originalURL
         conditions = {'id':id}
         if mode == 'mobile' and mobile is not None:
@@ -80,7 +80,7 @@ def getURLList(user):
 # Get perticular url this user generated
 @app.route('/u/<user>/<inputURL>')
 def getTinyURL(inputURL, user):
-    # judge tiny or original
+    # Judge tiny or original
     tinyMode = False
     id = convertIDFromStr(inputURL)
 
@@ -100,7 +100,7 @@ def getTinyURL(inputURL, user):
             urlInfo = {'result': 'failed', 'data':'Error: No such url created'}
             return json.dumps(urlInfo)
         else:
-            # create a new shorten url
+            # Create a new shorten url
             timestr = time.strftime("%Y-%m-%d %H:%M:%S.000", time.gmtime())
             id = insert_db('url', ('userid', 'origin_url', 'create_date'), (user, inputURL, timestr))
 
