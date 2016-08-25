@@ -4,56 +4,47 @@ import sqlite3
 import sys
 import time
 
-DATABASE = 'test.db'
+DATABASE = 'tinyURL.db'
 CHAR = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 app = Flask(__name__)
 
 # Hello World
-@app.route("/")
+@app.route('/')
 def hello():
     info = {'result': 'succeed', 'data': 'Hello World! Thank you for using my tinyURL system.'}
     print("device category: %s" % (request.user_agent.platform))
     return json.dumps(info)
 
 # Redirect from shorten URL
-@app.route('/<inputStr>')
-def getOriginalURL(inputStr):
+@app.route('/<shortenedCode>')
+def getOriginalURL(shortenedCode):
     # Judge different divices
     platform = request.user_agent.platform
-    mode = 'computer'
-    if platform in ['iphone', 'android', 'blackberry']:
-        mode = 'mobile'
-    elif platform in ['ipad']:
-        mode = 'tablet'
+
+    urlKey, timesKey = 'origin_url', 'original_times' # default to be desktop mode
+    if platform in ['iphone', 'android', 'blackberry']: # mobile mode
+        urlKey, timesKey = 'mobile_redirect', 'mobile_times'
+    elif platform in ['ipad']: # tablet mode
+        urlKey, timesKey = 'tablet_redirect', 'tablet_times'
     # else:
-    #     print('computer')
-    id = convertIDFromStr(inputStr)
+    #     print('desktop')
+    id = convertIDFromStr(shortenedCode)
     if id == -1:
         errMsg = {'result': 'failed', 'data':'Error: inviled character'}
         return json.dumps(errMsg)
 
-    data = query_db('SELECT origin_url, mobile_redirect, tablet_redirect, original_times, mobile_times, tablet_times FROM url WHERE id = ?;',(str(id),), one = True)
+    data = query_db('SELECT origin_url, original_times, %s, %s FROM url WHERE id = ?;' % (urlKey, timesKey), (id,), True)
     if data:
-        originalURL, mobile, tablet, originalTimes, mobileTimes, tabletTimes = data
+        # if url for current mode is not exist, use the desktop url
+        originalURL, originalTimes, url, times = data
+        if url is None:  
+            url, times, urlKey, timesKey = originalURL, originalTimes, 'origin_url', 'original_times'
 
-        # Add different time for different divices
-        url = originalURL
-        conditions = {'id':id}
-        if mode == 'mobile' and mobile is not None:
-            url = mobile
-            mobileTimes = int(mobileTimes) + 1
-            values = {'mobile_times': mobileTimes}
-        elif mode == 'tablet' and tablet is not None:
-            url = tablet
-            tabletTimes = int(tabletTimes) + 1
-            values = {'tablet_times': tabletTimes}
-        else:
-            originalTimes = int(originalTimes) + 1
-            values = {'original_times':originalTimes}
-
+        values, conditions = {timesKey: int(times) + 1}, {'id':id}
         update_db('url',values,conditions)
 
+        # Add 'http://' prefix
         if url.find('http://') != 0 and url.find('https://') != 0:
             url = 'http://' + url
 
@@ -61,39 +52,44 @@ def getOriginalURL(inputStr):
     else :
         urlInfo = {'result': 'failed', 'data':'Error: Shorten URL not existed'}
         return json.dumps(urlInfo)
+    
 
 
 # Get all the urls this user generated
-@app.route('/u/<user>')
-def getURLList(user):
-    data = query_db("SELECT * FROM url WHERE userid = ?",(user,), False)
-    urlSet = []
-    for urlData in data:
-        id, userid, type, originalURL, mobile, tablet, originalTimes, mobileTimes, tabletTimes, createDate = urlData
-        generatedURL = convertURLFromID(id)
-        url = {'id': id, 'shortenURL': generatedURL, 'originalURL': originalURL, 'mobileURL':mobile, 'tabletURL':tablet, 'originalTimes': originalTimes, 'mobileTimes':mobileTimes, 'tabletTimes':tabletTimes, 'createDate': createDate}
-        urlSet.append(url)
-    urlInfo = {'result': 'succeed', 'data': urlSet}
-    return json.dumps(urlInfo)
+@app.route('/u/<userID>/')
+def getURLList(userID):
+    data = query_db("SELECT * FROM url WHERE userid = ?",(userID,), False)
+    if data:
+        urlSet = []
+        for urlData in data:
+            id, userid, type, originalURL, mobile, tablet, originalTimes, mobileTimes, tabletTimes, createDate = urlData
+            generatedURL = convertURLFromID(id)
+            url = {'id': id, 'shortenURL': generatedURL, 'originalURL': originalURL, 'mobileURL':mobile, 'tabletURL':tablet, 'originalTimes': originalTimes, 'mobileTimes':mobileTimes, 'tabletTimes':tabletTimes, 'createDate': createDate}
+            urlSet.append(url)
+        urlInfo = {'result': 'succeed', 'data': urlSet}
+        return json.dumps(urlInfo)
+    else:
+        urlInfo = {'result': 'failed', 'data': 'Error: User not existed'}
+        return json.dumps(urlInfo)
 
 
 # Get perticular url this user generated
-@app.route('/u/<user>/<inputURL>')
-def getTinyURL(inputURL, user):
+@app.route('/u/<userID>/<inputURL>')
+def getTinyURL(inputURL, userID):
     # Judge tiny or original
     tinyMode = False
     id = convertIDFromStr(inputURL)
 
     if id == -1: #original url
-        data = query_db('SELECT * FROM url WHERE origin_url = ?', (inputURL,), True)
+        data = query_db('SELECT * FROM url WHERE origin_url = ? and userid = ?', (inputURL, userID), True)
     else:        #tiny url
-        data = query_db('SELECT * FROM url WHERE id = ?', (id,), True)
+        data = query_db('SELECT * FROM url WHERE id = ? and userid', (id, userID), True)
         tinyMode = True
 
     if data:
-        id, userid, type, originalURL, mobile, tablet, originalTimes, mobileTimes, tabletTimes, createDate = data
+        id, _, _, originalURL, mobile, tablet, originalTimes, mobileTimes, tabletTimes, createDate = data
         generatedURL = convertURLFromID(id)
-        urlInfo = {'result': 'succeed','id': id, 'userID': userid, 'generatedURL': generatedURL, 'originalURL': originalURL, 'mobileURL': mobile, 'tabletURL': tablet, 'originalTimes': originalTimes, 'mobileTimes':mobileTimes, 'tabletTimes':tabletTimes, 'createDate': createDate}
+        urlInfo = {'result': 'succeed','id': id, 'userID': userID, 'generatedURL': generatedURL, 'originalURL': originalURL, 'mobileURL': mobile, 'tabletURL': tablet, 'originalTimes': originalTimes, 'mobileTimes':mobileTimes, 'tabletTimes':tabletTimes, 'createDate': createDate}
         return json.dumps(urlInfo)
     else:
         if tinyMode:
@@ -111,14 +107,14 @@ def getTinyURL(inputURL, user):
 
 # Config the url for different device
 # Warning: might cause duplicate url
-@app.route('/u/<user>/<shortenURL>/config/<mode>/<newURL>')
-def configURL(user, shortenURL, mode, newURL):
+@app.route('/u/<userID>/<shortenURL>/config/<mode>/<newURL>')
+def configURL(userID, shortenURL, mode, newURL):
     id = convertIDFromStr(shortenURL)
     if id == -1:
         urlInfo = {'result': 'failed', 'data':'Error: Shorten URL not existed'}
         return json.dumps(urlInfo)
     else:
-        data = query_db('SELECT * FROM url WHERE id = ?', (id,), True)
+        data = query_db('SELECT * FROM url WHERE id = ? and userid = ?', (id, userID), True)
 
         if data is not None:
             conditions = {'id': id}
@@ -130,7 +126,7 @@ def configURL(user, shortenURL, mode, newURL):
                 values = {'origin_url': "'%s'" % (newURL), 'original_times': 0}
             update_db('url', values, conditions)
             data = query_db('SELECT * FROM url WHERE id = ?', (id,), True)
-            id, userid, type, originalURL, mobile, tablet, originalTimes, mobileTimes, tabletTimes, createDate = data
+            id, _, _, originalURL, mobile, tablet, originalTimes, mobileTimes, tabletTimes, createDate = data
             generatedURL = convertURLFromID(id)
             url = {'id': id, 'shortenURL': generatedURL, 'originalURL': originalURL, 'mobileURL':mobile, 'tabletURL':tablet, 'originalTimes': originalTimes, 'mobileTimes':mobileTimes, 'tabletTimes':tabletTimes, 'createDate': createDate}
             urlInfo = {'result': 'succeed', 'data': url}
@@ -143,7 +139,7 @@ def configURL(user, shortenURL, mode, newURL):
 def init_db():
     print('Initializing data base...')
     try:
-        con = sqlite3.connect('test.db')
+        con = sqlite3.connect(DATABASE)
         cur = con.cursor()
         urlqry = 'CREATE TABLE IF NOT EXISTS `url` (`id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, `userid` INTEGER, `type` INTEGER NOT NULL DEFAULT 0, `origin_url` TEXT NOT NULL, `mobile_redirect` TEXT, `tablet_redirect` TEXT, `original_times` INTEGER NOT NULL DEFAULT 0, `mobile_times` INTEGER, `tablet_times` INTEGER, `create_date` TEXT);'
         userqry = 'CREATE TABLE IF NOT EXISTS `users` (`id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, `username` TEXT NOT NULL);'
@@ -155,7 +151,6 @@ def init_db():
         sys.exit(1)
 
 def get_db():
-    DATABASE = 'test.db'
     db = getattr(g, '_database', None)
     if db is None:
         db = g._database = sqlite3.connect(DATABASE)
@@ -198,7 +193,7 @@ def convertURLFromID(id):
         total //= len(CHAR)
     if len(modifiedStr) < 6:
         modifiedStr = '0'*(6-len(modifiedStr)) + modifiedStr
-    generatedURL = 'localhost:5000/{}'.format(modifiedStr)
+    generatedURL = 'localhost:5000/%s' % (modifiedStr)
     return generatedURL
 
 def convertIDFromStr(inputStr):
