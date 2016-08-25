@@ -22,7 +22,7 @@ def getOriginalURL(inputStr):
         errMsg = {'result': 'failed', 'data':'Error: inviled character'}
         return json.dumps(errMsg)
 
-    data = query_db("SELECT origin_url, mobile_redirect, tablet_redirect, original_times, mobile_times, tablet_times FROM url WHERE id = ?;",(str(id),), one = True)
+    data = query_db('SELECT origin_url, mobile_redirect, tablet_redirect, original_times, mobile_times, tablet_times FROM url WHERE id = ?;',(str(id),), one = True)
     if data:
         originalURL, mobile, tablet, originalTimes, mobileTimes, tabletTimes = data
 
@@ -32,10 +32,10 @@ def getOriginalURL(inputStr):
         update_db('url',values,conditions)
 
         if originalURL is not None:
-            if originalURL.find("http://") != 0 and originalURL.find("https://") != 0:
-                originalURL = "http://" + originalURL
+            if originalURL.find('http://') != 0 and originalURL.find('https://') != 0:
+                originalURL = 'http://' + originalURL
 
-        return redirect("{}".format(originalURL), code=302)
+        return redirect(originalURL, code=302)
     else :
         urlInfo = {'result': 'failed', 'data':'Error: Shorten URL not existed'}
         return json.dumps(urlInfo)
@@ -47,9 +47,9 @@ def getTinyURL(inputURL, user):
     tinyMode = False
     id = convertIDFromStr(inputURL)
     if id == -1: #original url
-        data = query_db("SELECT * FROM url WHERE origin_url = ?", (inputURL,), True)
+        data = query_db('SELECT * FROM url WHERE origin_url = ?', (inputURL,), True)
     else:        #tiny url
-        data = query_db("SELECT * FROM url WHERE id = ?", (id,), True)
+        data = query_db('SELECT * FROM url WHERE id = ?', (id,), True)
         tinyMode = True
 
     if data:
@@ -62,6 +62,7 @@ def getTinyURL(inputURL, user):
             urlInfo = {'result': 'failed', 'data':'Error: No such url created'}
             return json.dumps(urlInfo)
         else:
+            # create a new shorten url
             timestr = time.strftime("%Y-%m-%d %H:%M:%S.000", time.gmtime())
             id = insert_db('url', ('userid', 'origin_url', 'create_date'), (user, inputURL, timestr))
             generatedURL = convertURLFromID(id)
@@ -71,7 +72,32 @@ def getTinyURL(inputURL, user):
 
 @app.route('/u/<user>/<shortenURL>/config/<mode>/<newURL>')
 def configURL(user, shortenURL, mode, newURL):
-    return ''
+    id = convertIDFromStr(shortenURL)
+    if id == -1:
+        urlInfo = {'result': 'failed', 'data':'Error: Shorten URL not existed'}
+        return json.dumps(urlInfo)
+    else:
+        data = query_db('SELECT * FROM url WHERE id = ?', (id,), True)
+
+        if data is not None:
+            conditions = {'id': id}
+            if mode == 'mobile':
+                values = {'mobile_redirect': "'%s'" % (newURL), 'mobile_times': 0}
+            elif mode == 'tablet':
+                values = {'tablet_redirect': "'%s'" % (newURL), 'tablet_times': 0}
+            else:
+                values = {'origin_url': "'%s'" % (newURL), 'original_times': 0}
+            update_db('url', values, conditions)
+            data = query_db('SELECT * FROM url WHERE id = ?', (id,), True)
+            id, userid, type, originalURL, mobile, tablet, originalTimes, mobileTimes, tabletTimes, createDate = data
+            generatedURL = convertURLFromID(id)
+            url = {'id': id, 'shortenURL': generatedURL, 'originalURL': originalURL, 'mobileURL':mobile, 'tabletURL':tablet, 'originalTimes': originalTimes, 'mobileTimes':mobileTimes, 'tabletTimes':tabletTimes, 'createDate': createDate}
+            urlInfo = {'result': 'succeed', 'data': url}
+            return json.dumps(urlInfo)
+        else:
+            urlInfo = {'result': 'failed', 'data':'Error: Shorten URL not existed'}
+            return json.dumps(urlInfo)
+    
         
 
 
@@ -84,20 +110,21 @@ def getURLList(user):
         generatedURL = convertURLFromID(id)
         url = {'id': id, 'shortenURL': generatedURL, 'originalURL': originalURL, 'mobileURL':mobile, 'tabletURL':tablet, 'originalTimes': originalTimes, 'mobileTimes':mobileTimes, 'tabletTimes':tabletTimes, 'createDate': createDate}
         urlSet.append(url)
-    return json.dumps(urlSet)
+    urlInfo = {'result': 'succeed', 'data': urlSet}
+    return json.dumps(urlInfo)
 
 
 def init_db():
-    print("initializing data base...")
+    print('Initializing data base...')
     try:
         con = sqlite3.connect('test.db')
 
         cur = con.cursor()
-        qry = "CREATE TABLE IF NOT EXISTS `url` (`id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, `userid` INTEGER, `type` INTEGER NOT NULL DEFAULT 0, `origin_url` TEXT NOT NULL, `mobile_redirect` TEXT, `tablet_redirect` TEXT, `original_times` INTEGER NOT NULL DEFAULT 0, `mobile_times` INTEGER, `tablet_times` INTEGER, `create_date` TEXT);"
+        qry = 'CREATE TABLE IF NOT EXISTS `url` (`id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, `userid` INTEGER, `type` INTEGER NOT NULL DEFAULT 0, `origin_url` TEXT NOT NULL, `mobile_redirect` TEXT, `tablet_redirect` TEXT, `original_times` INTEGER NOT NULL DEFAULT 0, `mobile_times` INTEGER, `tablet_times` INTEGER, `create_date` TEXT);'
         cur.execute(qry)
-        print("data base initialized.")
+        print('data base initialized.')
     except sqlite3.Error as e:
-        print("Error %s:" % e.args[0])
+        print('Error %s:' % e.args[0])
         sys.exit(1)
 
 def get_db():
@@ -131,13 +158,14 @@ def insert_db(table, fields=(), values=()):
 def update_db(table, values={}, conditions = {}):
     db = get_db()
     cur = db.cursor()
-    valuesStr = ', '.join(str(k)+"="+str(v) for (k, v) in values.items())
-    conditionStr = ', '.join(str(k)+"="+str(v) for (k, v) in conditions.items())
+    valuesStr = ', '.join(str(k)+'='+str(v) for (k, v) in values.items())
+    conditionStr = ', '.join(str(k)+'='+str(v) for (k, v) in conditions.items())
     query = 'UPDATE %s SET %s WHERE %s' % (table, valuesStr, conditionStr)
     cur.execute(query, values)
     db.commit()
-    id = cur.lastrowid
-    return id
+    count = cur.rowcount
+    cur.close()
+    return count
 
 
 def convertURLFromID(id):
@@ -145,7 +173,7 @@ def convertURLFromID(id):
     while total != 0:
         modifiedStr += CHAR[total % len(CHAR)]
         total //= len(CHAR)
-    generatedURL = "localhost:5000/{}".format(modifiedStr)
+    generatedURL = 'localhost:5000/{}'.format(modifiedStr)
     if len(generatedURL) < 6:
         # todo: add 0
         print("add 0")
