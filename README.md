@@ -21,7 +21,7 @@ $ python tinyURL.py
 
 ## Usage
 
-#### -to visit a shortenedURL, visit the URL like
+### To visit a shortenedURL, visit the URL like
 ```bash
 localhost:5000/<shortenedCode>
 ```
@@ -33,7 +33,7 @@ eg: [localhost:5000/000001](localhost:5000/000001)
 
 
 
-#### -to submit an URL and get shortened URL, visit the URL like
+### To submit an URL and get shortened URL, visit the URL like
 ```bash
 localhost:5000/u/<userid>/<rawURL>
 ```
@@ -45,7 +45,7 @@ eg: localhost:5000/u/1/www.google.com
 
 
 
-#### -to get a list of all existing shortened URLs of current user, visit the URL like
+### To get a list of all existing shortened URLs of current user, visit the URL like
 ```bash
 localhost:5000/u/<userid>
 ```
@@ -57,7 +57,7 @@ eg: [localhost:5000/u/1](localhost:5000/u/1)
 
 
 
-#### -to configure the URL should redirect to based on device, visit the URL like 
+### To configure the URL should redirect to based on device, visit the URL like 
 ```bash
 localhost:5000/u/<userid>/<shortenedCode>/config/<mode>/<newURL>
 ```
